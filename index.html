@@ -233,6 +233,7 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
 .btn.dback{border-color:var(--line);color:var(--muted);background:transparent}
 @media (max-width:860px){.btn.dicebtn{margin:0 0 8px}}
 @media (prefers-reduced-motion:reduce){#dIcon.spin{animation:none}}
+body.locked .edit-only{display:none!important}
 </style>
 </head>
 <body>
@@ -243,12 +244,13 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
     <div class="mode">
             <button class="btn" id="mFull">☰ Full list</button>
       <button class="btn" id="mMix">🔀 Shuffle week</button>
+      <button class="btn" id="lockBtn" title="Enter password to edit">🔒 Edit</button>
       <button class="btn" id="reshuffle" hidden title="Shuffle again">↻ Reshuffle</button>
     </div>
   </header>
   <aside>
     <input class="search" id="q" type="search" placeholder="Search songs or chord">
-    <button class="btn add" id="addSong">＋ Add song</button>
+    <button class="btn add edit-only" id="addSong">＋ Add song</button>
     <button class="btn dicebtn" id="rollBtn" title="Pick a song that has been played the least">🎲 Roll the dice</button>
     <div class="count" id="count"></div>
     <h2>Category</h2>
@@ -261,7 +263,7 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
   <main>
     <section class="stage">
       <div class="screen" id="screen"></div>
-      <div class="now"><h1 id="title">Pick a song</h1><span class="chord" id="chord" hidden></span><button class="pen" id="penNow" title="Edit song" hidden>✏️</button></div>
+      <div class="now"><h1 id="title">Pick a song</h1><span class="chord" id="chord" hidden></span><button class="pen edit-only" id="penNow" title="Edit song" hidden>✏️</button></div>
       <div class="meta" id="meta"></div>
       <div class="controls">
         <button class="btn on" id="playAll" title="Play every song in the list that has a video">▶ Play all</button>
@@ -271,7 +273,7 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
         <button class="btn" id="repBtn">🔁 Repeat: Off</button>
         <a class="btn" id="yt" target="_blank" rel="noopener" style="text-decoration:none">Find on YouTube</a>
       </div>
-      <div class="linkrow">
+      <div class="linkrow edit-only">
         <input id="link" placeholder="Paste YouTube link for this song">
         <button class="btn" id="save">Save link</button>
       </div>
@@ -284,7 +286,7 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
           <button class="btn small scr-step" data-scr="up" title="Scroll up one page" aria-label="Scroll up">▲</button>
           <button class="btn small scr-step" data-scr="down" title="Scroll down one page" aria-label="Scroll down">▼</button>
           <button class="btn small" data-scr="bottom" title="Go to bottom">⏬ Bottom</button>
-        </span><button class="btn small mvbtn" id="mvUp" hidden title="Move selected song up" aria-label="Move selected song up">Move ▲</button><button class="btn small mvbtn" id="mvDown" hidden title="Move selected song down" aria-label="Move selected song down">Move ▼</button><button class="btn small" id="reorderBtn" hidden>↕ Reorder</button></div>
+        </span><button class="btn small mvbtn" id="mvUp" hidden title="Move selected song up" aria-label="Move selected song up">Move ▲</button><button class="btn small mvbtn" id="mvDown" hidden title="Move selected song down" aria-label="Move selected song down">Move ▼</button><button class="btn small edit-only" id="reorderBtn" hidden>↕ Reorder</button></div>
       <div id="songs"></div>
     </section>
   </main>
@@ -300,7 +302,7 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
   <div class="dice-meta" id="dMeta"></div>
   <button class="btn dbig dplay" id="dPlay" type="button">▶ Play this song</button>
   <button class="btn dbig dagain" id="dAgain" type="button">🎲 Roll again</button>
-  <button class="btn dbig" id="dEdit" type="button">✏️ Edit this song</button>
+  <button class="btn dbig edit-only" id="dEdit" type="button">✏️ Edit this song</button>
   <button class="btn dbig dback" id="dBack" type="button">Back to list</button>
 </div></dialog>
 <dialog id="pwDlg"><form class="dlg" method="dialog" id="pwForm">
@@ -382,7 +384,7 @@ let repeat = store.get("gsv_repeat","off");   // off | all | one
 let shufOn = store.get("gsv_shuf",false);
 let queue = null;   // {title, ids:[song ids], pos}
 let db = null;
-let unlocked = (()=>{try{return sessionStorage.getItem("gsv_ok")==="1"}catch(e){return false}})();
+let unlocked = false;   // must enter the password every time the page is opened
 rebuild();
 
 const $ = id => document.getElementById(id);
@@ -480,7 +482,7 @@ function rowHTML(s){
     <span class="ic ${has?"has":""}">${has?"▶":"○"}</span>
     <span class="t">${esc(s.n)}<span class="sub">${CATS[s.d]||""}${s.v?` <span class="v-${s.v}">${s.v}</span>`:""}${s.tags.length?`<span class="tags">${s.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}</span>`:""}${s.comments.length?` <span class="cmt">💬 ${s.comments.length}</span>`:""}</span></span>
     <span class="chord">${esc(s.c)}</span>
-    ${reorderOn && canReorder() ? `<span class="mv"><span class="grip" data-drag="${s.id}" title="Hold and drag to move" aria-hidden="true">⠿</span></span>` : `<button class="pen" data-edit="${s.id}" title="Edit song" aria-label="Edit ${esc(s.n)}">✏️</button>`}</div>`;
+    ${reorderOn && canReorder() ? `<span class="mv"><span class="grip" data-drag="${s.id}" title="Hold and drag to move" aria-hidden="true">⠿</span></span>` : `<button class="pen edit-only" data-edit="${s.id}" title="Edit song" aria-label="Edit ${esc(s.n)}">✏️</button>`}</div>`;
 }
 function renderList(){
   const rb = $("reorderBtn"); rb.hidden = !canReorder(); if(!canReorder()) reorderOn = false;
@@ -497,7 +499,7 @@ function renderList(){
   if(tag!=="all") title += " / #"+tag;
   $("listTitle").textContent = title;
   $("listCount").textContent = list.length+" songs";
-  const removedHTML = (mode==="full" && REMOVED.length) ? `<div class="letter removed-h">Removed songs (${REMOVED.length})</div>${REMOVED.map(s=>`<div class="song removed"><span class="ic">✕</span><span class="t">${esc(s.n)}<span class="sub">${CATS[s.d]||""}</span></span><span class="chord">${esc(s.c)}</span><button class="btn restore" data-restore="${s.id}">Restore</button></div>`).join("")}` : "";
+  const removedHTML = (mode==="full" && REMOVED.length) ? `<div class="letter removed-h">Removed songs (${REMOVED.length})</div>${REMOVED.map(s=>`<div class="song removed"><span class="ic">✕</span><span class="t">${esc(s.n)}<span class="sub">${CATS[s.d]||""}</span></span><span class="chord">${esc(s.c)}</span><button class="btn restore edit-only" data-restore="${s.id}">Restore</button></div>`).join("")}` : "";
   if(!list.length){ $("songs").innerHTML = `<div class="none">No songs match. Clear the search or pick another filter.</div>`+removedHTML; }
   else if(mode==="full"){
     const groups = {}; list.forEach(s=>{(groups[letterOf(s.n)] ||= []).push(s);});
@@ -582,7 +584,7 @@ function requireUnlock(then){
 }
 $("pwForm").onsubmit = e=>{
   e.preventDefault();
-  if($("pw").value===PASS){ unlocked=true; try{sessionStorage.setItem("gsv_ok","1")}catch(_){}; $("pwDlg").close(); const f=$("pwDlg")._then; f&&f(); }
+  if($("pw").value===PASS){ unlocked=true; setLock(); $("pwDlg").close(); const f=$("pwDlg")._then; f&&f(); }
   else $("pwErr").textContent="Wrong password. Try again.";
 };
 $("pwCancel").onclick = ()=>$("pwDlg").close();
@@ -734,6 +736,21 @@ $("dPlay").onclick = ()=>{ const s=byId[rollHist[rollPos]]; $("diceDlg").close()
 $("dEdit").onclick = ()=>{ const id=rollHist[rollPos]; $("diceDlg").close(); openEditor(id); };
 $("dBack").onclick = ()=>$("diceDlg").close();
 $("diceDlg").addEventListener("click", e=>{ if(e.target===$("diceDlg")) $("diceDlg").close(); });
+function setLock(){
+  document.body.classList.toggle("locked", !unlocked);
+  $("lockBtn").textContent = unlocked ? "🔓 Lock" : "🔒 Edit";
+  $("lockBtn").title = unlocked ? "Stop editing" : "Enter password to edit";
+  $("lockBtn").classList.toggle("on", unlocked);
+}
+$("lockBtn").onclick = ()=>{
+  if(unlocked){
+    unlocked=false; reorderOn=false; selId=null;
+    ["edDlg","pwDlg"].forEach(id=>{ if($(id).open) $(id).close(); });
+    $("note").textContent="Locked. Enter the password to edit again.";
+    setLock(); renderAll();
+  } else requireUnlock(()=>{ $("note").textContent="Edit mode on. Press 🔓 Lock when you're done."; });
+};
+setLock();
 $("addSong").onclick = ()=>openEditor(null);
 
 /* ---------- events ---------- */

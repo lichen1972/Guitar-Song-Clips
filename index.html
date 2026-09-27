@@ -184,6 +184,25 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
 .empty.nolink{background-size:cover;background-position:center;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.7)}
 .home{display:flex;align-items:center;gap:16px;color:inherit;text-decoration:none;border-radius:10px}
 .home:hover .brand{color:var(--sun)}
+/* list fits the window; whole rows; scroll buttons */
+.list-foot{display:flex;gap:6px;justify-content:center;padding:8px;border-top:1px solid var(--line);background:var(--panel)}
+.list-foot .btn{min-width:44px}
+#songs,.full-body{scroll-snap-type:y proximity;scrollbar-width:thin;scrollbar-color:var(--teal) transparent}
+.full-body{scroll-padding-top:30px}
+.song{scroll-snap-align:start}
+#songs::-webkit-scrollbar,.full-body::-webkit-scrollbar{width:10px}
+#songs::-webkit-scrollbar-thumb,.full-body::-webkit-scrollbar-thumb{background:var(--teal);border-radius:10px;border:2px solid var(--panel)}
+#songs::-webkit-scrollbar-track,.full-body::-webkit-scrollbar-track{background:transparent}
+@media (min-width:861px){
+  main{overflow:hidden;height:100%;grid-template-rows:minmax(0,1fr);align-content:stretch}
+  .stage{position:static;overflow-y:auto;max-height:100%;align-self:start}
+  .list{display:flex;flex-direction:column;min-height:0;height:100%}
+  #songs{flex:1;min-height:0;max-height:none}
+  main.full #songs{overflow:hidden}
+  .full-wrap{height:100%}
+  .full-body,.rail{max-height:none;height:100%}
+}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -230,6 +249,12 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
     <section class="list">
       <div class="list-head"><b id="listTitle"></b><span id="listCount"></span><span style="flex:1"></span><button class="btn small" id="mvUp" hidden title="Move selected song up" aria-label="Move selected song up">▲</button><button class="btn small" id="mvDown" hidden title="Move selected song down" aria-label="Move selected song down">▼</button><button class="btn small" id="reorderBtn" hidden>↕ Reorder</button></div>
       <div id="songs"></div>
+      <div class="list-foot" aria-label="Scroll the song list">
+        <button class="btn small" data-scr="top" title="Go to top">⏫ Top</button>
+        <button class="btn small" data-scr="up" title="Scroll up one page">▲</button>
+        <button class="btn small" data-scr="down" title="Scroll down one page">▼</button>
+        <button class="btn small" data-scr="bottom" title="Go to bottom">⏬ Bottom</button>
+      </div>
     </section>
   </main>
 </div>
@@ -606,6 +631,15 @@ $("songs").addEventListener("pointercancel", endDrag);
 $("mvUp").onclick = ()=>selId&&moveSong(selId,-1);
 $("mvDown").onclick = ()=>selId&&moveSong(selId,1);
 $("reorderBtn").onclick = ()=>{ if(reorderOn){ reorderOn=false; selId=null; renderList(); } else requireUnlock(()=>{ reorderOn=true; selId=current?current.id:null; $("note").textContent="Hold ⠿ and drag a song, or tap a song and use ▲ ▼ at the top of the list. Press Done when finished."; renderList(); }); };
+document.querySelector(".list-foot").onclick = e=>{
+  const b=e.target.closest("[data-scr]"); if(!b) return;
+  const box = (mode==="full" && $("fullBody")) ? $("fullBody") : $("songs");
+  const page = Math.max(80, box.clientHeight*0.85);
+  const k=b.dataset.scr;
+  if(k==="top") box.scrollTo({top:0,behavior:"smooth"});
+  else if(k==="bottom") box.scrollTo({top:box.scrollHeight,behavior:"smooth"});
+  else box.scrollBy({top:k==="up"?-page:page,behavior:"smooth"});
+};
 $("home").onclick = e=>{
   e.preventDefault();
   mode="daily"; day=DAYS[todayIdx]; cat="all"; voice="all"; tag="all"; q=""; $("q").value="";

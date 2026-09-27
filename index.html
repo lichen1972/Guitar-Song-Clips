@@ -211,6 +211,28 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
 .scrollnav{display:flex;gap:6px}
 .scrollnav .scr-step{min-width:40px}
 .btn.mvbtn{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn.dicebtn{width:100%;margin:-8px 0 18px;background:var(--teal);border-color:var(--teal);color:#fff}
+.dice-dlg{width:min(440px,94vw);border:3px solid var(--nav);border-radius:18px}
+.dice{align-items:stretch;gap:12px;padding:20px 22px}
+.dice-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dice-nav{border:0;background:transparent;font-weight:800;font-size:16px;color:var(--brass);padding:4px 2px}
+.dice-nav:disabled{opacity:.35;cursor:default}
+.dice-label{font-weight:800;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal)}
+#dIcon{display:inline-block}
+#dIcon.spin{animation:dspin .6s ease-out}
+@keyframes dspin{from{transform:rotate(-360deg) scale(.6)}to{transform:none}}
+.dice-badges{display:flex;justify-content:center;gap:6px}
+.dchord{background:var(--teal);color:#fff;font-weight:800;padding:6px 14px;border-radius:8px;min-width:44px;text-align:center}
+.dvoice{background:var(--nav);color:#fff;font-weight:800;padding:6px 10px;border-radius:8px;min-width:36px;text-align:center}
+.dvoice.vFemale{background:var(--female)} .dvoice.vMale{background:var(--male)}
+.dice-title{text-align:center;font-size:21px;font-weight:800;line-height:1.3;margin:2px 0 0}
+.dice-meta{text-align:center;color:var(--muted);font-size:13px;margin-bottom:4px}
+.btn.dbig{padding:12px;font-size:15px;border-width:2px;border-color:var(--nav);background:var(--panel);border-radius:10px}
+.btn.dplay{background:var(--brass);border-color:var(--nav);color:#fff}
+.btn.dagain{background:var(--sun);color:#232323}
+.btn.dback{border-color:var(--line);color:var(--muted);background:transparent}
+@media (max-width:860px){.btn.dicebtn{margin:0 0 8px}}
+@media (prefers-reduced-motion:reduce){#dIcon.spin{animation:none}}
 </style>
 </head>
 <body>
@@ -227,6 +249,7 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
   <aside>
     <input class="search" id="q" type="search" placeholder="Search songs or chord">
     <button class="btn add" id="addSong">＋ Add song</button>
+    <button class="btn dicebtn" id="rollBtn" title="Pick a song that has been played the least">🎲 Roll the dice</button>
     <div class="count" id="count"></div>
     <h2>Category</h2>
     <div class="cats" id="cats"></div>
@@ -266,6 +289,20 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
     </section>
   </main>
 </div>
+<dialog id="diceDlg" class="dice-dlg"><div class="dlg dice">
+  <div class="dice-top">
+    <button class="dice-nav" id="dLast" type="button">«« Last</button>
+    <span class="dice-label"><span id="dIcon">🎲</span> Roll the dice</span>
+    <button class="dice-nav" id="dNext" type="button">Next »»</button>
+  </div>
+  <div class="dice-badges"><span class="dchord" id="dChord"></span><span class="dvoice" id="dVoice"></span></div>
+  <h3 class="dice-title" id="dTitle"></h3>
+  <div class="dice-meta" id="dMeta"></div>
+  <button class="btn dbig dplay" id="dPlay" type="button">▶ Play this song</button>
+  <button class="btn dbig dagain" id="dAgain" type="button">🎲 Roll again</button>
+  <button class="btn dbig" id="dEdit" type="button">✏️ Edit this song</button>
+  <button class="btn dbig dback" id="dBack" type="button">Back to list</button>
+</div></dialog>
 <dialog id="pwDlg"><form class="dlg" method="dialog" id="pwForm">
   <h3>Enter password to edit</h3>
   <input id="pw" type="password" autocomplete="off" placeholder="Password">
@@ -496,6 +533,7 @@ function renderQueue(){
   $("yt").href = "https://www.youtube.com/results?search_query="+encodeURIComponent(s.n+" guitar");
   $("link").value = links[s.id]||"";
   $("screen").innerHTML = embed(vids, true, queue.title);
+  if(!current || current.id!==s.id) bumpPlay(s.id);
   current = s; renderCtl(); renderList();
 }
 function startQueue(){
@@ -524,7 +562,7 @@ function renderPlayer(auto){
     ? embed([id], auto, s.n)
     : `<div class="empty nolink" style="background-image:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,.55)),url(${NOLINK_IMG})"><p>No video link yet for this song.</p><p style="font-size:13px;opacity:.8">Use “Find on YouTube”, copy the video link, paste it below and save.</p></div>`;
 }
-function play(s,auto=true){ if(queue){queue=null; renderCtl();} current = s; renderPlayer(auto); renderList(); }
+function play(s,auto=true){ if(queue){queue=null; renderCtl();} if(s && (!current || current.id!==s.id)) bumpPlay(s.id); current = s; renderPlayer(auto); renderList(); }
 function step(dir){
   if(queue){ const n=queue.ids.length; queue.pos=(queue.pos+dir+n)%n; renderQueue(); return; }
   const list = visible(); if(!list.length) return;
@@ -659,6 +697,41 @@ $("home").onclick = e=>{
   const box=$("songs"); if(box) box.scrollTop=0;
   window.scrollTo({top:0,behavior:"smooth"});
 };
+/* ---------- play counts + roll the dice ---------- */
+let plays = store.get("gsv_plays",{});
+function bumpPlay(id){
+  plays[id]=(plays[id]||0)+1; store.set("gsv_plays",plays);
+  if(db){ try{ db.doc("plays/"+id).set({n:plays[id]}); }catch(e){} }
+}
+const DAYNAME = {Mon:"Mon",Tue:"Tue",Wed:"Wed",Thu:"Thu",Fri:"Fri",Sat:"Sat",Sun:"Sun",Any:"Misc"};
+let rollHist = [], rollPos = -1, rollSeen = new Set();
+function rollOne(){
+  let pool = SONGS.filter(s=>!rollSeen.has(s.id));
+  if(!pool.length){ rollSeen.clear(); pool = SONGS.slice(); }
+  const min = Math.min(...pool.map(s=>plays[s.id]||0));
+  const cands = pool.filter(s=>(plays[s.id]||0)===min);
+  const pick = cands[Math.floor(Math.random()*cands.length)];
+  rollSeen.add(pick.id); rollHist = rollHist.slice(0,rollPos+1); rollHist.push(pick.id); rollPos = rollHist.length-1;
+}
+function showRoll(anim){
+  const s = byId[rollHist[rollPos]]; if(!s) return;
+  $("dChord").textContent = s.c || "–";
+  $("dVoice").textContent = s.v==="Female" ? "♀" : s.v==="Male" ? "♂" : "🎸";
+  $("dVoice").title = s.v || "Instrument"; $("dVoice").className = "dvoice v"+(s.v||"I");
+  $("dTitle").textContent = s.n;
+  const n = plays[s.id]||0;
+  $("dMeta").textContent = `Day: ${DAYNAME[s.d]||s.d}  ·  ${CATS[s.d]||""}  ·  ${n===0?"never played":"played "+n+(n===1?" time":" times")}${ytId(links[s.id])?"":"  ·  no video yet"}`;
+  $("dLast").disabled = rollPos<=0;
+  if(anim){ const i=$("dIcon"); i.classList.remove("spin"); void i.offsetWidth; i.classList.add("spin"); }
+}
+$("rollBtn").onclick = ()=>{ if(!SONGS.length) return; rollOne(); showRoll(true); $("diceDlg").showModal(); };
+$("dNext").onclick = ()=>{ if(rollPos < rollHist.length-1) rollPos++; else rollOne(); showRoll(true); };
+$("dAgain").onclick = ()=>{ rollOne(); showRoll(true); };
+$("dLast").onclick = ()=>{ if(rollPos>0){ rollPos--; showRoll(false); } };
+$("dPlay").onclick = ()=>{ const s=byId[rollHist[rollPos]]; $("diceDlg").close(); if(s) play(s); };
+$("dEdit").onclick = ()=>{ const id=rollHist[rollPos]; $("diceDlg").close(); openEditor(id); };
+$("dBack").onclick = ()=>$("diceDlg").close();
+$("diceDlg").addEventListener("click", e=>{ if(e.target===$("diceDlg")) $("diceDlg").close(); });
 $("addSong").onclick = ()=>openEditor(null);
 
 /* ---------- events ---------- */
@@ -719,6 +792,10 @@ renderAll(); renderPlayer(false); renderCtl();
       snap.docChanges().forEach(c=>{ if(c.type==="removed") delete links[c.doc.id]; });
       store.set("gsv_links",links);
       renderList(); if(current && !document.querySelector(".screen iframe")) renderPlayer(false);
+    });
+    db.collection("plays").onSnapshot(snap=>{
+      snap.docs.forEach(d=>{ const v=d.data(); if(v && typeof v.n==="number") plays[d.id]=Math.max(plays[d.id]||0, v.n); });
+      store.set("gsv_plays",plays);
     });
     db.collection("order").onSnapshot(snap=>{
       snap.docs.forEach(d=>{ const v=d.data(); if(v && Array.isArray(v.ids)) orders[d.id]=v.ids; });

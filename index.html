@@ -469,8 +469,8 @@ function renderList(){
   const linked = SONGS.filter(s=>ytId(links[s.id])).length;
   $("count").textContent = `${SONGS.length} songs, ${linked} with video`;
 }
-// On Android, don't auto-start videos: tap play, like on iPhone
-const NO_AUTOPLAY = /Android/i.test(navigator.userAgent);
+// Never auto-start videos: they play only when you press ▶ (all devices)
+const NO_AUTOPLAY = true;
 function embed(vids, auto, title){
   let p = "rel=0" + (auto && !NO_AUTOPLAY ? "&autoplay=1" : "");
   const rest = vids.slice(1);

@@ -179,6 +179,8 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
 .grip:hover{background:var(--bg)}
 .song.dragging{background:var(--panel2);box-shadow:0 6px 18px rgba(0,0,0,.25),inset 4px 0 0 var(--brass);position:relative;z-index:2;cursor:grabbing}
 .song.dragging .grip{cursor:grabbing}
+.song.sel{background:var(--panel2);box-shadow:inset 4px 0 0 var(--teal);outline:2px solid var(--teal);outline-offset:-2px}
+#mvUp:disabled,#mvDown:disabled{opacity:.4;cursor:default}
 </style>
 </head>
 <body>
@@ -223,7 +225,7 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
       <div class="note" id="note"></div>
     </section>
     <section class="list">
-      <div class="list-head"><b id="listTitle"></b><span id="listCount"></span><span style="flex:1"></span><button class="btn small" id="reorderBtn" hidden>↕ Reorder</button></div>
+      <div class="list-head"><b id="listTitle"></b><span id="listCount"></span><span style="flex:1"></span><button class="btn small" id="mvUp" hidden title="Move selected song up" aria-label="Move selected song up">▲</button><button class="btn small" id="mvDown" hidden title="Move selected song down" aria-label="Move selected song down">▼</button><button class="btn small" id="reorderBtn" hidden>↕ Reorder</button></div>
       <div id="songs"></div>
     </section>
   </main>
@@ -343,7 +345,7 @@ function matches(s){
     &&(!t||hay.includes(t)||s.c.toLowerCase()===t);
 }
 let orders = store.get("gsv_order",{});   // category -> [song ids]
-let reorderOn = false;
+let reorderOn = false, selId = null;
 function orderCat(){ // the single category the list shows, if any
   if(mode!=="daily" || q.trim() || tag!=="all") return null;
   return cat!=="all" ? cat : day;
@@ -364,7 +366,7 @@ function moveSong(id, dir){
   if(i<0 || j<0 || j>=list.length) return;
   const ids = list.map(s=>s.id); [ids[i],ids[j]]=[ids[j],ids[i]];
   orders[k] = ids; store.set("gsv_order",orders); renderList();
-  const row = document.querySelector(`.song[data-id="${id}"] [data-mv="${dir}"]`); if(row) row.focus();
+  const row = document.querySelector(`.song[data-id="${id}"]`); if(row) row.scrollIntoView({block:"nearest"});
   saveOrder(k);
 }
 function saveOrder(k){
@@ -398,15 +400,17 @@ function renderSide(){
 }
 function rowHTML(s){
   const has = ytId(links[s.id]);
-  return `<div class="song ${current&&current.id===s.id?"on":""}" data-id="${s.id}" role="button" tabindex="0">
+  return `<div class="song ${current&&current.id===s.id?"on":""} ${reorderOn&&selId===s.id?"sel":""}" data-id="${s.id}" role="button" tabindex="0">
     <span class="ic ${has?"has":""}">${has?"▶":"○"}</span>
     <span class="t">${esc(s.n)}<span class="sub">${CATS[s.d]||""}${s.v?` <span class="v-${s.v}">${s.v}</span>`:""}${s.tags.length?`<span class="tags">${s.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}</span>`:""}${s.comments.length?` <span class="cmt">💬 ${s.comments.length}</span>`:""}</span></span>
     <span class="chord">${esc(s.c)}</span>
-    ${reorderOn && canReorder() ? `<span class="mv"><span class="grip" data-drag="${s.id}" title="Hold and drag to move" aria-hidden="true">⠿</span><button class="pen" data-mv="-1" data-mid="${s.id}" title="Move up" aria-label="Move ${esc(s.n)} up">▲</button><button class="pen" data-mv="1" data-mid="${s.id}" title="Move down" aria-label="Move ${esc(s.n)} down">▼</button></span>` : `<button class="pen" data-edit="${s.id}" title="Edit song" aria-label="Edit ${esc(s.n)}">✏️</button>`}</div>`;
+    ${reorderOn && canReorder() ? `<span class="mv"><span class="grip" data-drag="${s.id}" title="Hold and drag to move" aria-hidden="true">⠿</span></span>` : `<button class="pen" data-edit="${s.id}" title="Edit song" aria-label="Edit ${esc(s.n)}">✏️</button>`}</div>`;
 }
 function renderList(){
   const rb = $("reorderBtn"); rb.hidden = !canReorder(); if(!canReorder()) reorderOn = false;
   rb.textContent = reorderOn ? "✓ Done" : "↕ Reorder"; rb.classList.toggle("on", reorderOn);
+  $("mvUp").hidden = $("mvDown").hidden = !reorderOn;
+  $("mvUp").disabled = $("mvDown").disabled = !selId;
   const list = visible();
   let title;
   if(mode==="full") title = "Full list A–Z";
@@ -595,7 +599,9 @@ function endDrag(){
 }
 $("songs").addEventListener("pointerup", endDrag);
 $("songs").addEventListener("pointercancel", endDrag);
-$("reorderBtn").onclick = ()=>{ if(reorderOn){ reorderOn=false; renderList(); } else requireUnlock(()=>{ reorderOn=true; $("note").textContent="Hold ⠿ and drag a song up or down (or use ▲ ▼), then press Done."; renderList(); }); };
+$("mvUp").onclick = ()=>selId&&moveSong(selId,-1);
+$("mvDown").onclick = ()=>selId&&moveSong(selId,1);
+$("reorderBtn").onclick = ()=>{ if(reorderOn){ reorderOn=false; selId=null; renderList(); } else requireUnlock(()=>{ reorderOn=true; selId=current?current.id:null; $("note").textContent="Hold ⠿ and drag a song, or tap a song and use ▲ ▼ at the top of the list. Press Done when finished."; renderList(); }); };
 $("addSong").onclick = ()=>openEditor(null);
 
 /* ---------- events ---------- */
@@ -608,7 +614,9 @@ $("songs").onclick = e=>{
   const rs=e.target.closest("[data-restore]"); if(rs){ const id=rs.dataset.restore; requireUnlock(async ()=>{ const {id:_i, ...rest}=byId[id]; delete rest.removed; await saveSong(id, rest, null, false); $("note").textContent=`Restored “${rest.n}”.`; }); return; }
   const ed=e.target.closest("[data-edit]"); if(ed){ e.stopPropagation(); openEditor(ed.dataset.edit); return; }
   const l=e.target.closest("[data-l]"); if(l){ const el=document.getElementById("L-"+l.dataset.l); if(el) $("fullBody").scrollTo({top:el.offsetTop-$("fullBody").offsetTop,behavior:"smooth"}); return; }
-  const b=e.target.closest("[data-id]"); if(b) play(byId[b.dataset.id]);
+  const b=e.target.closest("[data-id]"); if(!b) return;
+  if(reorderOn){ selId=b.dataset.id; renderList(); return; }
+  play(byId[b.dataset.id]);
 };
 $("songs").onkeydown = e=>{ if(e.key==="Enter" && e.target.matches(".song")) play(byId[e.target.dataset.id]); };
 $("penNow").onclick = ()=>current&&openEditor(current.id);

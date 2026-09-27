@@ -175,6 +175,10 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
 .list-head{align-items:center}
 .mv{display:flex;gap:2px}
 .mv .pen{font-size:12px;padding:5px 7px;border:1px solid var(--line)}
+.grip{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;font-size:18px;line-height:1;padding:4px 8px;color:var(--teal);border-radius:6px}
+.grip:hover{background:var(--bg)}
+.song.dragging{background:var(--panel2);box-shadow:0 6px 18px rgba(0,0,0,.25),inset 4px 0 0 var(--brass);position:relative;z-index:2;cursor:grabbing}
+.song.dragging .grip{cursor:grabbing}
 </style>
 </head>
 <body>
@@ -361,6 +365,9 @@ function moveSong(id, dir){
   const ids = list.map(s=>s.id); [ids[i],ids[j]]=[ids[j],ids[i]];
   orders[k] = ids; store.set("gsv_order",orders); renderList();
   const row = document.querySelector(`.song[data-id="${id}"] [data-mv="${dir}"]`); if(row) row.focus();
+  saveOrder(k);
+}
+function saveOrder(k){
   clearTimeout(orderTimer);
   orderTimer = setTimeout(async ()=>{
     if(!db){ $("note").textContent="Order saved."; return; }
@@ -395,7 +402,7 @@ function rowHTML(s){
     <span class="ic ${has?"has":""}">${has?"▶":"○"}</span>
     <span class="t">${esc(s.n)}<span class="sub">${CATS[s.d]||""}${s.v?` <span class="v-${s.v}">${s.v}</span>`:""}${s.tags.length?`<span class="tags">${s.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}</span>`:""}${s.comments.length?` <span class="cmt">💬 ${s.comments.length}</span>`:""}</span></span>
     <span class="chord">${esc(s.c)}</span>
-    ${reorderOn && canReorder() ? `<span class="mv"><button class="pen" data-mv="-1" data-mid="${s.id}" title="Move up" aria-label="Move ${esc(s.n)} up">▲</button><button class="pen" data-mv="1" data-mid="${s.id}" title="Move down" aria-label="Move ${esc(s.n)} down">▼</button></span>` : `<button class="pen" data-edit="${s.id}" title="Edit song" aria-label="Edit ${esc(s.n)}">✏️</button>`}</div>`;
+    ${reorderOn && canReorder() ? `<span class="mv"><span class="grip" data-drag="${s.id}" title="Hold and drag to move" aria-hidden="true">⠿</span><button class="pen" data-mv="-1" data-mid="${s.id}" title="Move up" aria-label="Move ${esc(s.n)} up">▲</button><button class="pen" data-mv="1" data-mid="${s.id}" title="Move down" aria-label="Move ${esc(s.n)} down">▼</button></span>` : `<button class="pen" data-edit="${s.id}" title="Edit song" aria-label="Edit ${esc(s.n)}">✏️</button>`}</div>`;
 }
 function renderList(){
   const rb = $("reorderBtn"); rb.hidden = !canReorder(); if(!canReorder()) reorderOn = false;
@@ -556,7 +563,39 @@ $("edRemove").onclick = async ()=>{
   await saveSong(id, {...rest, removed:true}, null, false);
   $("note").textContent = `Removed “${s.n}”. Restore it at the bottom of ☰ Full list.`;
 };
-$("reorderBtn").onclick = ()=>{ if(reorderOn){ reorderOn=false; renderList(); } else requireUnlock(()=>{ reorderOn=true; $("note").textContent="Use ▲ ▼ to move songs, then press Done."; renderList(); }); };
+/* drag to reorder (mouse + touch) */
+let drag = null;
+$("songs").addEventListener("pointerdown", e=>{
+  const g = e.target.closest("[data-drag]"); if(!g || !reorderOn) return;
+  e.preventDefault();
+  const row = g.closest(".song");
+  drag = {row, box:$("songs"), y:e.clientY, id:g.dataset.drag};
+  row.classList.add("dragging");
+  g.setPointerCapture(e.pointerId);
+});
+$("songs").addEventListener("pointermove", e=>{
+  if(!drag) return;
+  const {row, box} = drag;
+  const y = e.clientY;
+  // auto-scroll near edges of the list
+  const r = box.getBoundingClientRect();
+  if(y < r.top+40) box.scrollTop -= 12; else if(y > r.bottom-40) box.scrollTop += 12;
+  const prev = row.previousElementSibling, next = row.nextElementSibling;
+  if(prev && prev.classList.contains("song") && y < prev.getBoundingClientRect().top + prev.offsetHeight/2) box.insertBefore(row, prev);
+  else if(next && next.classList.contains("song") && y > next.getBoundingClientRect().top + next.offsetHeight/2) box.insertBefore(next, row);
+});
+function endDrag(){
+  if(!drag) return;
+  drag.row.classList.remove("dragging");
+  const k = orderCat();
+  const ids = [...$("songs").querySelectorAll(".song[data-id]")].map(r=>r.dataset.id);
+  drag = null;
+  if(k){ orders[k] = ids; store.set("gsv_order",orders); saveOrder(k); }
+  renderList();
+}
+$("songs").addEventListener("pointerup", endDrag);
+$("songs").addEventListener("pointercancel", endDrag);
+$("reorderBtn").onclick = ()=>{ if(reorderOn){ reorderOn=false; renderList(); } else requireUnlock(()=>{ reorderOn=true; $("note").textContent="Hold ⠿ and drag a song up or down (or use ▲ ▼), then press Done."; renderList(); }); };
 $("addSong").onclick = ()=>openEditor(null);
 
 /* ---------- events ---------- */

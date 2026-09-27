@@ -234,6 +234,8 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
 @media (max-width:860px){.btn.dicebtn{margin:0 0 8px}}
 @media (prefers-reduced-motion:reduce){#dIcon.spin{animation:none}}
 body.locked .edit-only{display:none!important}
+#save:disabled{opacity:.45;cursor:default;border-color:var(--line)}
+a.btn,a.btn:visited{color:var(--ink)}
 </style>
 </head>
 <body>
@@ -535,7 +537,7 @@ function renderQueue(){
   $("chord").hidden=false; $("chord").textContent=s.c; $("penNow").hidden=false;
   $("meta").innerHTML = `▶ Playing all: ${esc(queue.title)}, song ${queue.pos+1} of ${queue.ids.length}${shufOn?" (random order)":""}${queue.skipped?`, ${queue.skipped} without video skipped`:""}. Title may lag once YouTube moves to the next video.`;
   $("yt").href = "https://www.youtube.com/results?search_query="+encodeURIComponent(s.n+" guitar");
-  $("link").value = links[s.id]||"";
+  $("link").value = links[s.id]||""; syncSave();
   $("screen").innerHTML = embed(vids, true, queue.title);
   if(!current || current.id!==s.id) bumpPlay(s.id);
   current = s; renderCtl(); renderList();
@@ -558,7 +560,7 @@ function renderPlayer(auto){
   $("penNow").hidden = false;
   $("meta").innerHTML = (CATS[s.d]||"") + (s.v?` / <span class="v-${s.v}">${s.v}</span>`:"") + (s.tags.length?" / "+s.tags.map(t=>"#"+esc(t)).join(" "):"");
   $("yt").href = "https://www.youtube.com/results?search_query="+encodeURIComponent(s.n+" guitar");
-  $("link").value = links[s.id]||"";
+  $("link").value = links[s.id]||""; syncSave();
   const id = ytId(links[s.id]);
   const cur = document.querySelector(".screen iframe");
   if(id && cur && cur.dataset.vid===id && !auto) return;
@@ -793,12 +795,18 @@ $("save").onclick = ()=>{
     store.set("gsv_links",links);
     $("note").textContent = v ? "Saved." : "Link removed.";
     if(db){ try{ v ? await db.doc("links/"+current.id).set({url:v}) : await db.doc("links/"+current.id).delete(); $("note").textContent = v?"Saved for everyone.":"Link removed."; }catch(e){ $("note").textContent = "Saved on this device only (shared save not allowed)."; } }
-    renderPlayer(true); renderList();
+    renderPlayer(true); renderList(); syncSave();
   });
 };
+function syncSave(){
+  const same = !current || $("link").value.trim() === (links[current.id]||"");
+  $("save").disabled = same;
+  $("save").textContent = same && current && links[current.id] ? "✓ Saved" : "Save link";
+}
+$("link").addEventListener("input", syncSave);
 $("link").onkeydown = e=>{ if(e.key==="Enter") $("save").click(); };
 
-renderAll(); renderPlayer(false); renderCtl();
+renderAll(); renderPlayer(false); renderCtl(); syncSave();
 
 /* ---------- shared data ---------- */
 (async()=>{

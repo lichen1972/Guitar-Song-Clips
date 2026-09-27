@@ -412,9 +412,11 @@ function daySongs(){
   return SONGS.filter(s=>s.d===day);
 }
 const wide = () => mode==="full" || (mode==="daily" && (q.trim() || cat!=="all" || tag!=="all"));
+// Search ignores Vietnamese accents: "giot nang" finds "Giọt Nắng"
+const plain = x => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase().replace(/\s+/g," ");
 function matches(s){
-  const t = q.trim().toLowerCase();
-  const hay = (s.n+" "+s.tags.join(" ")+" "+s.comments.map(c=>c.t).join(" ")).toLowerCase();
+  const t = plain(q.trim());
+  const hay = plain(s.n+" "+s.tags.join(" ")+" "+s.comments.map(c=>c.t).join(" "));
   return (cat==="all"||s.d===cat)&&(voice==="all"||(voice==="Instrument"?!s.v:s.v===voice))&&(tag==="all"||s.tags.includes(tag))
     &&(!t||hay.includes(t)||s.c.toLowerCase()===t);
 }

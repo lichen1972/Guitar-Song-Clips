@@ -469,8 +469,10 @@ function renderList(){
   const linked = SONGS.filter(s=>ytId(links[s.id])).length;
   $("count").textContent = `${SONGS.length} songs, ${linked} with video`;
 }
+// On Android, don't auto-start videos: tap play, like on iPhone
+const NO_AUTOPLAY = /Android/i.test(navigator.userAgent);
 function embed(vids, auto, title){
-  let p = "rel=0" + (auto?"&autoplay=1":"");
+  let p = "rel=0" + (auto && !NO_AUTOPLAY ? "&autoplay=1" : "");
   const rest = vids.slice(1);
   if(repeat==="one" && vids.length===1) p += "&loop=1&playlist="+vids[0];
   else if(repeat!=="off" && vids.length>1) p += "&loop=1&playlist="+rest.join(",");

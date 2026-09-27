@@ -171,6 +171,10 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
 .welcome-sig{position:absolute;right:5%;bottom:7%;font-family:"Courgette","Brush Script MT",cursive;font-size:clamp(18px,3.4vw,34px);color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.6)}
 @media (max-width:860px){.count{margin:0 0 6px 4px}}
 .logo{width:40px;height:40px;border-radius:9px;flex:none;margin-right:-6px}
+.btn.small{padding:4px 10px;font-size:12px}
+.list-head{align-items:center}
+.mv{display:flex;gap:2px}
+.mv .pen{font-size:12px;padding:5px 7px;border:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -215,7 +219,7 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
       <div class="note" id="note"></div>
     </section>
     <section class="list">
-      <div class="list-head"><b id="listTitle"></b><span id="listCount"></span></div>
+      <div class="list-head"><b id="listTitle"></b><span id="listCount"></span><span style="flex:1"></span><button class="btn small" id="reorderBtn" hidden>↕ Reorder</button></div>
       <div id="songs"></div>
     </section>
   </main>
@@ -334,9 +338,35 @@ function matches(s){
   return (cat==="all"||s.d===cat)&&(voice==="all"||(voice==="Instrument"?!s.v:s.v===voice))&&(tag==="all"||s.tags.includes(tag))
     &&(!t||hay.includes(t)||s.c.toLowerCase()===t);
 }
+let orders = store.get("gsv_order",{});   // category -> [song ids]
+let reorderOn = false;
+function orderCat(){ // the single category the list shows, if any
+  if(mode!=="daily" || q.trim() || tag!=="all") return null;
+  return cat!=="all" ? cat : day;
+}
+const canReorder = () => !!orderCat() && voice==="all";
 function visible(){
   const list = (wide() ? SONGS : daySongs()).filter(matches);
-  return mode==="full" ? list.slice().sort((a,b)=>collator.compare(a.n,b.n)) : list;
+  if(mode==="full") return list.slice().sort((a,b)=>collator.compare(a.n,b.n));
+  const k = orderCat();
+  if(k && orders[k]){ const rank = new Map(orders[k].map((id,i)=>[id,i])); const base = new Map(list.map((s,i)=>[s.id,i]));
+    return list.slice().sort((a,b)=>(rank.has(a.id)?rank.get(a.id):1e6+base.get(a.id))-(rank.has(b.id)?rank.get(b.id):1e6+base.get(b.id))); }
+  return list;
+}
+let orderTimer = null;
+function moveSong(id, dir){
+  const k = orderCat(); if(!k) return;
+  const list = visible(); const i = list.findIndex(s=>s.id===id); const j = i+dir;
+  if(i<0 || j<0 || j>=list.length) return;
+  const ids = list.map(s=>s.id); [ids[i],ids[j]]=[ids[j],ids[i]];
+  orders[k] = ids; store.set("gsv_order",orders); renderList();
+  const row = document.querySelector(`.song[data-id="${id}"] [data-mv="${dir}"]`); if(row) row.focus();
+  clearTimeout(orderTimer);
+  orderTimer = setTimeout(async ()=>{
+    if(!db){ $("note").textContent="Order saved."; return; }
+    try{ await db.doc("order/"+k).set({ids:orders[k]}); $("note").textContent="Order saved for everyone."; }
+    catch(e){ $("note").textContent="Order saved on this device only (shared save not allowed)."; }
+  }, 700);
 }
 
 function renderDays(){
@@ -365,9 +395,11 @@ function rowHTML(s){
     <span class="ic ${has?"has":""}">${has?"▶":"○"}</span>
     <span class="t">${esc(s.n)}<span class="sub">${CATS[s.d]||""}${s.v?` <span class="v-${s.v}">${s.v}</span>`:""}${s.tags.length?`<span class="tags">${s.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}</span>`:""}${s.comments.length?` <span class="cmt">💬 ${s.comments.length}</span>`:""}</span></span>
     <span class="chord">${esc(s.c)}</span>
-    <button class="pen" data-edit="${s.id}" title="Edit song" aria-label="Edit ${esc(s.n)}">✏️</button></div>`;
+    ${reorderOn && canReorder() ? `<span class="mv"><button class="pen" data-mv="-1" data-mid="${s.id}" title="Move up" aria-label="Move ${esc(s.n)} up">▲</button><button class="pen" data-mv="1" data-mid="${s.id}" title="Move down" aria-label="Move ${esc(s.n)} down">▼</button></span>` : `<button class="pen" data-edit="${s.id}" title="Edit song" aria-label="Edit ${esc(s.n)}">✏️</button>`}</div>`;
 }
 function renderList(){
+  const rb = $("reorderBtn"); rb.hidden = !canReorder(); if(!canReorder()) reorderOn = false;
+  rb.textContent = reorderOn ? "✓ Done" : "↕ Reorder"; rb.classList.toggle("on", reorderOn);
   const list = visible();
   let title;
   if(mode==="full") title = "Full list A–Z";
@@ -524,6 +556,7 @@ $("edRemove").onclick = async ()=>{
   await saveSong(id, {...rest, removed:true}, null, false);
   $("note").textContent = `Removed “${s.n}”. Restore it at the bottom of ☰ Full list.`;
 };
+$("reorderBtn").onclick = ()=>{ if(reorderOn){ reorderOn=false; renderList(); } else requireUnlock(()=>{ reorderOn=true; $("note").textContent="Use ▲ ▼ to move songs, then press Done."; renderList(); }); };
 $("addSong").onclick = ()=>openEditor(null);
 
 /* ---------- events ---------- */
@@ -532,6 +565,7 @@ $("cats").onclick = e=>{const b=e.target.closest("[data-c]"); if(!b) return; cat
 $("voices").onclick = e=>{const b=e.target.closest("[data-v]"); if(!b) return; voice = voice===b.dataset.v ? "all" : b.dataset.v; renderAll();};
 $("tagsBox").onclick = e=>{const b=e.target.closest("[data-t]"); if(!b) return; tag=b.dataset.t; renderAll();};
 $("songs").onclick = e=>{
+  const mv=e.target.closest("[data-mv]"); if(mv){ e.stopPropagation(); moveSong(mv.dataset.mid, +mv.dataset.mv); return; }
   const rs=e.target.closest("[data-restore]"); if(rs){ const id=rs.dataset.restore; requireUnlock(async ()=>{ const {id:_i, ...rest}=byId[id]; delete rest.removed; await saveSong(id, rest, null, false); $("note").textContent=`Restored “${rest.n}”.`; }); return; }
   const ed=e.target.closest("[data-edit]"); if(ed){ e.stopPropagation(); openEditor(ed.dataset.edit); return; }
   const l=e.target.closest("[data-l]"); if(l){ const el=document.getElementById("L-"+l.dataset.l); if(el) $("fullBody").scrollTo({top:el.offsetTop-$("fullBody").offsetTop,behavior:"smooth"}); return; }
@@ -581,6 +615,10 @@ renderAll(); renderPlayer(false); renderCtl();
       snap.docChanges().forEach(c=>{ if(c.type==="removed") delete links[c.doc.id]; });
       store.set("gsv_links",links);
       renderList(); if(current && !document.querySelector(".screen iframe")) renderPlayer(false);
+    });
+    db.collection("order").onSnapshot(snap=>{
+      snap.docs.forEach(d=>{ const v=d.data(); if(v && Array.isArray(v.ids)) orders[d.id]=v.ids; });
+      store.set("gsv_order",orders); renderList();
     });
     db.collection("songs").onSnapshot(snap=>{
       snap.docs.forEach(d=>{ const v=d.data(); if(v) edits[d.id]=v; });

@@ -203,6 +203,10 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
   .full-body,.rail{max-height:none;height:100%}
 }
 [hidden]{display:none!important}
+.list-head{flex-wrap:wrap;row-gap:8px}
+.scrollnav{display:flex;gap:6px}
+.scrollnav .scr-step{min-width:40px}
+.btn.mvbtn{background:var(--teal);border-color:var(--teal);color:#fff}
 </style>
 </head>
 <body>
@@ -247,14 +251,14 @@ header .btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
       <div class="note" id="note"></div>
     </section>
     <section class="list">
-      <div class="list-head"><b id="listTitle"></b><span id="listCount"></span><span style="flex:1"></span><button class="btn small" id="mvUp" hidden title="Move selected song up" aria-label="Move selected song up">▲</button><button class="btn small" id="mvDown" hidden title="Move selected song down" aria-label="Move selected song down">▼</button><button class="btn small" id="reorderBtn" hidden>↕ Reorder</button></div>
+      <div class="list-head"><b id="listTitle"></b><span id="listCount"></span><span style="flex:1"></span>
+        <span class="scrollnav" id="scrollNav" aria-label="Scroll the song list">
+          <button class="btn small" data-scr="top" title="Go to top">⏫ Top</button>
+          <button class="btn small scr-step" data-scr="up" title="Scroll up one page" aria-label="Scroll up">▲</button>
+          <button class="btn small scr-step" data-scr="down" title="Scroll down one page" aria-label="Scroll down">▼</button>
+          <button class="btn small" data-scr="bottom" title="Go to bottom">⏬ Bottom</button>
+        </span><button class="btn small mvbtn" id="mvUp" hidden title="Move selected song up" aria-label="Move selected song up">Move ▲</button><button class="btn small mvbtn" id="mvDown" hidden title="Move selected song down" aria-label="Move selected song down">Move ▼</button><button class="btn small" id="reorderBtn" hidden>↕ Reorder</button></div>
       <div id="songs"></div>
-      <div class="list-foot" aria-label="Scroll the song list">
-        <button class="btn small" data-scr="top" title="Go to top">⏫ Top</button>
-        <button class="btn small" data-scr="up" title="Scroll up one page">▲</button>
-        <button class="btn small" data-scr="down" title="Scroll down one page">▼</button>
-        <button class="btn small" data-scr="bottom" title="Go to bottom">⏬ Bottom</button>
-      </div>
     </section>
   </main>
 </div>
@@ -439,6 +443,7 @@ function renderList(){
   const rb = $("reorderBtn"); rb.hidden = !canReorder(); if(!canReorder()) reorderOn = false;
   rb.textContent = reorderOn ? "✓ Done" : "↕ Reorder"; rb.classList.toggle("on", reorderOn);
   $("mvUp").hidden = $("mvDown").hidden = !reorderOn;
+  document.querySelectorAll(".scr-step").forEach(b=>b.hidden = reorderOn);
   $("mvUp").disabled = $("mvDown").disabled = !selId;
   const list = visible();
   let title;
@@ -631,7 +636,7 @@ $("songs").addEventListener("pointercancel", endDrag);
 $("mvUp").onclick = ()=>selId&&moveSong(selId,-1);
 $("mvDown").onclick = ()=>selId&&moveSong(selId,1);
 $("reorderBtn").onclick = ()=>{ if(reorderOn){ reorderOn=false; selId=null; renderList(); } else requireUnlock(()=>{ reorderOn=true; selId=current?current.id:null; $("note").textContent="Hold ⠿ and drag a song, or tap a song and use ▲ ▼ at the top of the list. Press Done when finished."; renderList(); }); };
-document.querySelector(".list-foot").onclick = e=>{
+$("scrollNav").onclick = e=>{
   const b=e.target.closest("[data-scr]"); if(!b) return;
   const box = (mode==="full" && $("fullBody")) ? $("fullBody") : $("songs");
   const page = Math.max(80, box.clientHeight*0.85);

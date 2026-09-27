@@ -1,0 +1,16 @@
+{
+  "name": "Guitar Songs – For Cuong & Friends",
+  "short_name": "Guitar Songs",
+  "description": "Guitar song clips by day and category",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#232323",
+  "theme_color": "#232323",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
